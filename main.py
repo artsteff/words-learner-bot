@@ -361,13 +361,25 @@ async def handle_callback_query(update: Update, context: CallbackContext) -> Non
         elif query.data.startswith("review_"):
             # Review session buttons
             user = query.from_user
-            review_data = query.data.split("_")
-            action = review_data[1]  # "knew" or "didnt_know"
+            logger.info(f"Processing review callback: {query.data}")
+            
+            # Parse callback data: "review_knew_123" or "review_didnt_know_123"
+            if query.data.startswith("review_knew_"):
+                action = "knew"
+                word_id_str = query.data.replace("review_knew_", "")
+            elif query.data.startswith("review_didnt_know_"):
+                action = "didnt_know"
+                word_id_str = query.data.replace("review_didnt_know_", "")
+            else:
+                logger.error(f"Unknown review callback format: {query.data}")
+                await query.edit_message_text("❌ Ошибка при обработке ответа. Попробуйте /learn снова.")
+                return
             
             try:
-                word_id = int(review_data[2])
-            except (IndexError, ValueError) as e:
-                logger.error(f"Error parsing word_id from callback data '{query.data}': {e}")
+                word_id = int(word_id_str)
+                logger.info(f"Parsed: action={action}, word_id={word_id}")
+            except ValueError as e:
+                logger.error(f"Error parsing word_id from '{word_id_str}' in callback '{query.data}': {e}")
                 await query.edit_message_text("❌ Ошибка при обработке ответа. Попробуйте /learn снова.")
                 return
             
