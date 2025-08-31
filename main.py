@@ -213,7 +213,7 @@ async def show_next_review_word(update: Update, context: CallbackContext) -> Non
 **{word.word}** → {word.translation}
 
 💡 Пример:
-{word.example_sentence_L1}
+{word.example if word.example else 'Пример не доступен'}
 """
         
         await update.message.reply_text(word_message, reply_markup=reply_markup)
