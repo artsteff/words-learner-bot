@@ -190,12 +190,14 @@ async def show_next_review_word(update: Update, context: CallbackContext, from_c
                 "Используйте /stats для просмотра статистики."
             )
             
-            if from_callback:
-                # We're in a callback query context
-                await update.callback_query.message.reply_text(completion_message)
-            else:
-                # We're in a regular message context
-                await update.message.reply_text(completion_message)
+                    if from_callback and update.callback_query:
+            # We're in a callback query context
+            await update.callback_query.message.reply_text(completion_message)
+        elif update.message:
+            # We're in a regular message context
+            await update.message.reply_text(completion_message)
+        else:
+            logger.error("Cannot send message: neither callback_query nor message available")
             
             # Clear session data
             context.user_data.clear()
@@ -224,21 +226,25 @@ async def show_next_review_word(update: Update, context: CallbackContext, from_c
 {word.example if word.example else 'Пример не доступен'}
 """
         
-        if from_callback:
+        if from_callback and update.callback_query:
             # We're in a callback query context
             await update.callback_query.message.reply_text(word_message, reply_markup=reply_markup)
-        else:
+        elif update.message:
             # We're in a regular message context
             await update.message.reply_text(word_message, reply_markup=reply_markup)
+        else:
+            logger.error("Cannot send word message: neither callback_query nor message available")
         
     except Exception as e:
         logger.error(f"Error showing review word: {e}")
         error_message = "❌ Ошибка при показе слова.\nПопробуйте /review снова."
         
-        if from_callback:
+        if from_callback and update.callback_query:
             await update.callback_query.message.reply_text(error_message)
-        else:
+        elif update.message:
             await update.message.reply_text(error_message)
+        else:
+            logger.error("Cannot send error message: neither callback_query nor message available")
 
 async def stats_command(update: Update, context: CallbackContext) -> None:
     """Handle /stats command"""
@@ -376,7 +382,14 @@ async def handle_callback_query(update: Update, context: CallbackContext) -> Non
                     
                                     # Show next word after a short delay
                 await asyncio.sleep(1)
-                await show_next_review_word(update, context, from_callback=True)
+                try:
+                    await show_next_review_word(update, context, from_callback=True)
+                except Exception as e:
+                    logger.error(f"Error showing next review word: {e}")
+                    await query.edit_message_text(
+                        "❌ Ошибка при показе следующего слова.\n"
+                        "Попробуйте /review снова."
+                    )
                 else:
                     await query.edit_message_text(
                         "❌ Ошибка при обработке ответа.\n"
