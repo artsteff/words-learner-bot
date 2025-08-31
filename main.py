@@ -103,7 +103,7 @@ async def help_command(update: Update, context: CallbackContext) -> None:
 /start - Начать работу с ботом
 /help - Показать эту справку
 /generate - Создать новый список слов
-/review - Повторить слова
+/learn - Изучить слова
 /stats - Показать статистику
 /profile - Настройки профиля
 
@@ -111,7 +111,7 @@ async def help_command(update: Update, context: CallbackContext) -> None:
 1. Выберите языковую пару
 2. Опишите контекст (например, "поездка в Амстердам")
 3. Получите персональный список слов
-4. Регулярно повторяйте слова
+4. Регулярно изучайте слова
 """
     await update.message.reply_text(help_text)
 
@@ -142,8 +142,8 @@ async def generate_command(update: Update, context: CallbackContext) -> None:
         "Можно указать количество: 'ресторан 15'"
     )
 
-async def review_command(update: Update, context: CallbackContext) -> None:
-    """Handle /review command"""
+async def learn_command(update: Update, context: CallbackContext) -> None:
+    """Handle /learn command"""
     user = update.effective_user
     
     try:
@@ -154,11 +154,11 @@ async def review_command(update: Update, context: CallbackContext) -> None:
         due_words = srs_service.get_due_words(user.id, limit=10)
         
         if not due_words:
-            await update.message.reply_text(
-                "🎉 Отлично! У вас нет слов для повторения.\n\n"
-                "Все слова уже выучены или еще не готовы для повторения.\n"
-                "Используйте /generate для добавления новых слов!"
-            )
+                    await update.message.reply_text(
+            "🎉 Отлично! У вас нет слов для изучения.\n\n"
+            "Все слова уже выучены или еще не готовы для повторения.\n"
+            "Используйте /generate для добавления новых слов!"
+        )
             return
         
         # Store words in context for this session
@@ -170,9 +170,9 @@ async def review_command(update: Update, context: CallbackContext) -> None:
         await show_next_review_word(update, context)
         
     except Exception as e:
-        logger.error(f"Error starting review session: {e}")
+        logger.error(f"Error starting learning session: {e}")
         await update.message.reply_text(
-            "❌ Ошибка при запуске повторения.\n"
+            "❌ Ошибка при запуске изучения.\n"
             "Попробуйте позже."
         )
 
@@ -183,9 +183,9 @@ async def show_next_review_word(update: Update, context: CallbackContext, from_c
         current_index = context.user_data.get('current_word_index', 0)
         
         if current_index >= len(words):
-            # Review session complete
+            # Learning session complete
             completion_message = (
-                "🎉 Повторение завершено!\n\n"
+                "🎉 Изучение завершено!\n\n"
                 f"Вы повторили {len(words)} слов.\n"
                 "Используйте /stats для просмотра статистики."
             )
@@ -237,7 +237,7 @@ async def show_next_review_word(update: Update, context: CallbackContext, from_c
         
     except Exception as e:
         logger.error(f"Error showing review word: {e}")
-        error_message = "❌ Ошибка при показе слова.\nПопробуйте /review снова."
+        error_message = "❌ Ошибка при показе слова.\nПопробуйте /learn снова."
         
         if from_callback and update.callback_query:
             await update.callback_query.message.reply_text(error_message)
@@ -353,7 +353,7 @@ async def handle_callback_query(update: Update, context: CallbackContext) -> Non
                 f"✅ Языковая пара установлена: {lang_from.upper()} → {lang_to.upper()}\n\n"
                 "Теперь вы можете:\n"
                 "• /generate - создать список слов\n"
-                "• /review - повторить слова\n"
+                "• /learn - изучить слова\n"
                 "• /stats - посмотреть статистику"
             )
         
@@ -388,12 +388,12 @@ async def handle_callback_query(update: Update, context: CallbackContext) -> Non
                     logger.error(f"Error showing next review word: {e}")
                     await query.edit_message_text(
                         "❌ Ошибка при показе следующего слова.\n"
-                        "Попробуйте /review снова."
+                        "Попробуйте /learn снова."
                     )
                 else:
                     await query.edit_message_text(
                         "❌ Ошибка при обработке ответа.\n"
-                        "Попробуйте /review снова."
+                        "Попробуйте /learn снова."
                     )
             except Exception as e:
                 logger.error(f"Error processing review: {e}")
@@ -424,20 +424,22 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         
         # Parse context and count
         parts = text.strip().split()
-        if len(parts) == 1:
-            context = parts[0]
-            count = 20  # Default
-        elif len(parts) == 2:
-            context = parts[0]
+        
+        # Check if the last part is a number
+        if len(parts) >= 2:
             try:
-                count = int(parts[1])
+                count = int(parts[-1])
                 if count > 100:
                     count = 100
                     await update.message.reply_text("⚠️ Максимум 100 слов. Установлено 100.")
+                # Remove the count from context
+                context = " ".join(parts[:-1])
             except ValueError:
+                # Last part is not a number, use default count
                 context = text
                 count = 20
         else:
+            # Only one word or empty, use default count
             context = text
             count = 20
         
@@ -467,9 +469,10 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
 
 📝 Контекст: {context}
 🌍 Языки: {lang_from.upper()} → {lang_to.upper()}
+📊 Запрошено: {count} слов
 
 📚 Слова добавлены в вашу коллекцию.
-Используйте /review для повторения!
+Используйте /learn для изучения!
 """
             
             await generating_msg.edit_text(result_message)
@@ -478,7 +481,7 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
             if len(words) > 0:
                 preview = "📖 Предварительный просмотр:\n\n"
                 for i, word in enumerate(words[:3]):  # Show first 3 words
-                    preview += f"{i+1}. **{word['word']}** → {word['translation']}\n"
+                    preview += f"{i+1}. {word['word']} → {word['translation']}\n"
                     if word.get('example_sentence_L1'):
                         preview += f"   💡 {word['example_sentence_L1']}\n"
                     preview += "\n"
@@ -504,7 +507,7 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
 telegram_app.add_handler(CommandHandler("start", start_command))
 telegram_app.add_handler(CommandHandler("help", help_command))
 telegram_app.add_handler(CommandHandler("generate", generate_command))
-telegram_app.add_handler(CommandHandler("review", review_command))
+telegram_app.add_handler(CommandHandler("learn", learn_command))
 telegram_app.add_handler(CommandHandler("stats", stats_command))
 telegram_app.add_handler(CommandHandler("profile", profile_command))
 
