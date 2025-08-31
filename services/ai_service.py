@@ -20,6 +20,8 @@ class AIService:
         Generate a custom word list based on context and language pair
         """
         try:
+            logger.info(f"AI Service: Generating {count} words for context '{context}', languages {language_from}->{language_to}")
+            
             # Validate count (max 100 words)
             if count > 100:
                 count = 100

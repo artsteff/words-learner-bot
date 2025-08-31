@@ -426,24 +426,29 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         
         # Parse context and count
         parts = text.strip().split()
+        logger.info(f"Parsing text: '{text}' into parts: {parts}")
         
         # Check if the last part is a number
         if len(parts) >= 2:
             try:
                 count = int(parts[-1])
+                logger.info(f"Found count in last part: {count}")
                 if count > 100:
                     count = 100
                     await update.message.reply_text("⚠️ Максимум 100 слов. Установлено 100.")
                 # Remove the count from context
                 context_text = " ".join(parts[:-1])
+                logger.info(f"Context without count: '{context_text}', count: {count}")
             except ValueError:
                 # Last part is not a number, use default count
                 context_text = text
                 count = 20
+                logger.info(f"Last part not a number, using default: context='{context_text}', count={count}")
         else:
             # Only one word or empty, use default count
             context_text = text
             count = 20
+            logger.info(f"Single word or empty, using default: context='{context_text}', count={count}")
         
         # Get user's language pair
         profile = user_service.get_user_profile(user.id)
