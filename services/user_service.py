@@ -129,7 +129,10 @@ class UserService:
     def get_user_stats(self, telegram_id: int) -> Dict[str, Any]:
         """Get user statistics"""
         try:
-            from services.srs_service import srs_service
+            from services.srs_service import SRSService
+            
+            # Create SRS service instance
+            srs_service = SRSService()
             
             # Get basic stats from SRS service
             stats = srs_service.get_review_stats(telegram_id)

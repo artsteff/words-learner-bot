@@ -262,17 +262,19 @@ async def stats_command(update: Update, context: CallbackContext) -> None:
 📊 Ваша статистика:
 
 📚 Слова:
-• Всего слов: {stats.get('total_words', 0)}
-• Добавлено сегодня: {stats.get('today_reviews', 0)}
+• Всего слов в коллекции: {stats.get('total_words', 0)}
+• Повторено сегодня: {stats.get('today_reviews', 0)}
 • Ожидают повторения: {stats.get('due_words', 0)}
 
 🎯 Прогресс:
-• Точность: {stats.get('accuracy', 0)}%
-• Серия дней: {streak}
+• Точность за 30 дней: {stats.get('accuracy', 0)}%
+• Серия дней изучения: {streak}
 
 👤 Профиль:
 • Языковая пара: {profile.get('language_from', 'Не выбрана')} → {profile.get('language_to', 'Не выбрана')}
 • Часовой пояс: {profile.get('timezone', 'UTC')}
+
+💡 Используйте /learn для изучения слов, /generate для добавления новых!
 """
         
         await update.message.reply_text(stats_message)
