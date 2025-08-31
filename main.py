@@ -138,8 +138,7 @@ async def generate_command(update: Update, context: CallbackContext) -> None:
         "• 'деловая встреча'\n"
         "• 'поход в ресторан'\n"
         "• 'заказ еды в ресторане'\n\n"
-        "По умолчанию будет создано 20 слов.\n"
-        "Можно указать количество: 'ресторан 15'"
+        "Можно указать количество слов: 'ресторан 15'"
     )
 
 async def learn_command(update: Update, context: CallbackContext) -> None:
@@ -457,7 +456,7 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         
         # Show "generating" message
         generating_msg = await update.message.reply_text(
-            f"🤖 Генерирую {count} слов для контекста: '{context_text}'...\n"
+            f"🤖 Генерирую слова для контекста: '{context_text}'...\n"
             "Это может занять несколько секунд."
         )
         
@@ -476,7 +475,6 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
 
 📝 Контекст: {context_text}
 🌍 Языки: {lang_from.upper()} → {lang_to.upper()}
-📊 Запрошено: {count} слов
 
 📚 Слова добавлены в вашу коллекцию.
 Используйте /learn для изучения!
