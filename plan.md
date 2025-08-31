@@ -339,7 +339,7 @@ reviews (
 
 ### Environment Variables Needed
 ```
-TELEGRAM_BOT_TOKEN=8228016705:AAGeaE-UYk2H6fWZPQ7UMEUwhUf4BMR7aLw
+TELEGRAM_BOT_TOKEN=your_bot_token_here
 OPENAI_API_KEY=your_openai_key
 DATABASE_URL=postgresql://user:pass@host:port/db
 TIMEZONE=UTC

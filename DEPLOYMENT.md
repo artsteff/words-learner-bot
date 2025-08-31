@@ -42,7 +42,7 @@
 3. **Configure Environment Variables**
    In Railway dashboard, add these variables:
    ```
-   TELEGRAM_BOT_TOKEN=8228016705:AAGeaE-UYk2H6fWZPQ7UMEUwhUf4BMR7aLw
+   TELEGRAM_BOT_TOKEN=your_bot_token_here
    OPENAI_API_KEY=your_openai_api_key_here
    DATABASE_URL=postgresql://... (Railway will provide)
    TIMEZONE=UTC
@@ -66,14 +66,14 @@
 
 2. **Set Telegram webhook**
    ```bash
-   curl -X POST "https://api.telegram.org/bot8228016705:AAGeaE-UYk2H6fWZPQ7UMEUwhUf4BMR7aLw/setWebhook" \
+   curl -X POST "https://api.telegram.org/botYOUR_BOT_TOKEN/setWebhook" \
    -H "Content-Type: application/json" \
    -d '{"url": "https://your-app.railway.app/webhook"}'
    ```
 
 3. **Verify webhook**
    ```bash
-   curl "https://api.telegram.org/bot8228016705:AAGeaE-UYk2H6fWZPQ7UMEUwhUf4BMR7aLw/getWebhookInfo"
+   curl "https://api.telegram.org/botYOUR_BOT_TOKEN/getWebhookInfo"
    ```
 
 ### Step 4: Test Deployment
