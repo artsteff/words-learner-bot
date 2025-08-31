@@ -359,12 +359,16 @@ async def webhook(request: Request):
     """Handle Telegram webhook"""
     try:
         data = await request.json()
+        logger.info(f"Received webhook update: {data.get('update_id', 'unknown')}")
+        
         update = Update.de_json(data, telegram_app.bot)
         await telegram_app.process_update(update)
+        
         return JSONResponse(content={"status": "ok"})
     except Exception as e:
         logger.error(f"Webhook error: {e}")
-        return JSONResponse(content={"status": "error"}, status_code=500)
+        # Return 200 even on error to prevent Telegram from retrying
+        return JSONResponse(content={"status": "error", "message": str(e)})
 
 # Health check endpoint
 @app.get("/health")
