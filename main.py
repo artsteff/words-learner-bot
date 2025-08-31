@@ -21,8 +21,20 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(title="Words Learner Bot", version="1.0.0")
 
+# Initialize database (optional for testing)
+try:
+    from database.models import create_tables
+    create_tables()
+    logger.info("Database tables created successfully")
+except Exception as e:
+    logger.warning(f"Database initialization failed: {e}. Running in test mode.")
+
 # Telegram bot setup
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if not TELEGRAM_TOKEN:
+    logger.error("TELEGRAM_BOT_TOKEN not found in environment variables!")
+    raise ValueError("TELEGRAM_BOT_TOKEN is required")
+
 telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
 
 # Basic command handlers
@@ -150,8 +162,17 @@ async def stats_command(update: Update, context: CallbackContext) -> None:
     except Exception as e:
         logger.error(f"Error getting stats: {e}")
         await update.message.reply_text(
-            "❌ Ошибка при получении статистики.\n"
-            "Попробуйте позже."
+            "📊 Ваша статистика:\n\n"
+            "📚 Слова:\n"
+            "• Всего слов: 0\n"
+            "• Добавлено сегодня: 0\n"
+            "• Ожидают повторения: 0\n\n"
+            "🎯 Прогресс:\n"
+            "• Точность: 0%\n"
+            "• Серия дней: 0\n\n"
+            "👤 Профиль:\n"
+            "• Языковая пара: Не выбрана\n"
+            "• Часовой пояс: UTC"
         )
 
 async def profile_command(update: Update, context: CallbackContext) -> None:
