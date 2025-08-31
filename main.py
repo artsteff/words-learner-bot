@@ -363,7 +363,13 @@ async def handle_callback_query(update: Update, context: CallbackContext) -> Non
             user = query.from_user
             review_data = query.data.split("_")
             action = review_data[1]  # "knew" or "didnt_know"
-            word_id = int(review_data[2])
+            
+            try:
+                word_id = int(review_data[2])
+            except (IndexError, ValueError) as e:
+                logger.error(f"Error parsing word_id from callback data '{query.data}': {e}")
+                await query.edit_message_text("❌ Ошибка при обработке ответа. Попробуйте /learn снова.")
+                return
             
             try:
                 from services.srs_service import SRSService
@@ -371,15 +377,16 @@ async def handle_callback_query(update: Update, context: CallbackContext) -> Non
                 
                 # Process the review
                 knew = (action == "knew")
+                logger.info(f"Processing review: word_id={word_id}, action='{action}', knew={knew}")
                 success = srs_service.process_review(word_id, user.id, knew)
                 
                 if success:
                     # Move to next word
                     context.user_data['current_word_index'] = context.user_data.get('current_word_index', 0) + 1
                     
-                    # Show feedback
+                    # Show feedback (don't edit the message, just send a new one)
                     feedback = "✅ Правильно!" if knew else "❌ Неправильно. Попробуйте еще раз!"
-                    await query.edit_message_text(feedback)
+                    await query.message.reply_text(feedback)
                     
                     # Show next word after a short delay
                     await asyncio.sleep(1)
@@ -427,27 +434,43 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         parts = text.strip().split()
         logger.info(f"Parsing text: '{text}' into parts: {parts}")
         
-        # Check if the last part is a number
-        if len(parts) >= 2:
-            try:
-                count = int(parts[-1])
-                logger.info(f"Found count in last part: {count}")
-                if count > 100:
-                    count = 100
-                    await update.message.reply_text("⚠️ Максимум 100 слов. Установлено 100.")
-                # Remove the count from context
-                context_text = " ".join(parts[:-1])
-                logger.info(f"Context without count: '{context_text}', count: {count}")
-            except ValueError:
-                # Last part is not a number, use default count
-                context_text = text
-                count = 20
-                logger.info(f"Last part not a number, using default: context='{context_text}', count={count}")
+        # Look for a number in the text (not just the last part)
+        count = 20  # default
+        context_text = text
+        
+        # Try to find a number pattern like "X слов" or just "X"
+        import re
+        number_pattern = r'(\d+)\s*слов?'
+        match = re.search(number_pattern, text.lower())
+        
+        if match:
+            count = int(match.group(1))
+            logger.info(f"Found count pattern: {count} words")
+            # Remove the number and "слов" from context
+            context_text = re.sub(number_pattern, '', text.lower()).strip()
+            # Capitalize first letter
+            if context_text:
+                context_text = context_text[0].upper() + context_text[1:]
+            logger.info(f"Context after removing count: '{context_text}', count: {count}")
         else:
-            # Only one word or empty, use default count
-            context_text = text
+            # Try to find just a number at the end
+            try:
+                last_part = parts[-1]
+                if last_part.isdigit():
+                    count = int(last_part)
+                    logger.info(f"Found count in last part: {count}")
+                    context_text = " ".join(parts[:-1])
+                    logger.info(f"Context without count: '{context_text}', count: {count}")
+            except (IndexError, ValueError):
+                logger.info(f"No count found, using default: context='{context_text}', count={count}")
+        
+        # Validate count
+        if count > 100:
+            count = 100
+            await update.message.reply_text("⚠️ Максимум 100 слов. Установлено 100.")
+        elif count < 1:
             count = 20
-            logger.info(f"Single word or empty, using default: context='{context_text}', count={count}")
+            await update.message.reply_text("⚠️ Минимум 1 слово. Установлено 20.")
         
         # Get user's language pair
         profile = user_service.get_user_profile(user.id)
