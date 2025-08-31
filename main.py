@@ -38,6 +38,27 @@ if not TELEGRAM_TOKEN:
 
 telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
 
+# Initialize the application
+async def initialize_telegram():
+    """Initialize Telegram application"""
+    await telegram_app.initialize()
+    await telegram_app.start()
+    logger.info("Telegram application initialized successfully")
+
+# Initialize on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize Telegram app on FastAPI startup"""
+    await initialize_telegram()
+
+# Shutdown event
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown Telegram app on FastAPI shutdown"""
+    await telegram_app.stop()
+    await telegram_app.shutdown()
+    logger.info("Telegram application shutdown successfully")
+
 # Basic command handlers
 async def start_command(update: Update, context: CallbackContext) -> None:
     """Handle /start command"""
