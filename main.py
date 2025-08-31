@@ -7,6 +7,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 import asyncio
 import logging
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -378,4 +379,13 @@ async def root():
     return {"message": "Words Learner Bot API", "version": "1.0.0"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    try:
+        logger.info("Starting Words Learner Bot...")
+        logger.info(f"Telegram Token: {'SET' if TELEGRAM_TOKEN else 'MISSING'}")
+        logger.info(f"OpenAI Key: {'SET' if os.getenv('OPENAI_API_KEY') else 'MISSING'}")
+        logger.info(f"Database URL: {'SET' if os.getenv('DATABASE_URL') else 'MISSING'}")
+        
+        uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+    except Exception as e:
+        logger.error(f"Failed to start application: {e}")
+        raise
