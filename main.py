@@ -144,11 +144,86 @@ async def generate_command(update: Update, context: CallbackContext) -> None:
 
 async def review_command(update: Update, context: CallbackContext) -> None:
     """Handle /review command"""
-    await update.message.reply_text(
-        "🔄 Начинаем повторение слов!\n\n"
-        "Сейчас будут показаны слова для повторения.\n"
-        "Отвечайте 'Знаю' или 'Не знаю'."
-    )
+    user = update.effective_user
+    
+    try:
+        from services.srs_service import SRSService
+        srs_service = SRSService()
+        
+        # Get due words for review
+        due_words = srs_service.get_due_words(user.id, limit=10)
+        
+        if not due_words:
+            await update.message.reply_text(
+                "🎉 Отлично! У вас нет слов для повторения.\n\n"
+                "Все слова уже выучены или еще не готовы для повторения.\n"
+                "Используйте /generate для добавления новых слов!"
+            )
+            return
+        
+        # Store words in context for this session
+        context.user_data['review_words'] = due_words
+        context.user_data['current_word_index'] = 0
+        context.user_data['review_session_active'] = True
+        
+        # Show first word
+        await show_next_review_word(update, context)
+        
+    except Exception as e:
+        logger.error(f"Error starting review session: {e}")
+        await update.message.reply_text(
+            "❌ Ошибка при запуске повторения.\n"
+            "Попробуйте позже."
+        )
+
+async def show_next_review_word(update: Update, context: CallbackContext) -> None:
+    """Show next word for review"""
+    try:
+        words = context.user_data.get('review_words', [])
+        current_index = context.user_data.get('current_word_index', 0)
+        
+        if current_index >= len(words):
+            # Review session complete
+            await update.message.reply_text(
+                "🎉 Повторение завершено!\n\n"
+                f"Вы повторили {len(words)} слов.\n"
+                "Используйте /stats для просмотра статистики."
+            )
+            # Clear session data
+            context.user_data.clear()
+            return
+        
+        word = words[current_index]
+        
+        # Create inline keyboard for "Знаю/Не знаю" buttons
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Знаю", callback_data=f"review_knew_{word.id}"),
+                InlineKeyboardButton("❌ Не знаю", callback_data=f"review_didnt_know_{word.id}")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # Show word
+        word_message = f"""
+📖 Слово {current_index + 1} из {len(words)}:
+
+**{word.word}** → {word.translation}
+
+💡 Пример:
+{word.example_sentence_L1}
+"""
+        
+        await update.message.reply_text(word_message, reply_markup=reply_markup)
+        
+    except Exception as e:
+        logger.error(f"Error showing review word: {e}")
+        await update.message.reply_text(
+            "❌ Ошибка при показе слова.\n"
+            "Попробуйте /review снова."
+        )
 
 async def stats_command(update: Update, context: CallbackContext) -> None:
     """Handle /stats command"""
@@ -260,6 +335,37 @@ async def handle_callback_query(update: Update, context: CallbackContext) -> Non
                 "• /review - повторить слова\n"
                 "• /stats - посмотреть статистику"
             )
+        
+        elif query.data.startswith("review_"):
+            # Review session buttons
+            user = update.effective_user
+            review_data = query.data.split("_")
+            action = review_data[1]  # "knew" or "didnt_know"
+            word_id = int(review_data[2])
+            
+            from services.srs_service import SRSService
+            srs_service = SRSService()
+            
+            # Process the review
+            knew = (action == "knew")
+            success = srs_service.process_review(word_id, user.id, knew)
+            
+            if success:
+                # Move to next word
+                context.user_data['current_word_index'] = context.user_data.get('current_word_index', 0) + 1
+                
+                # Show feedback
+                feedback = "✅ Правильно!" if knew else "❌ Неправильно. Попробуйте еще раз!"
+                await query.edit_message_text(feedback)
+                
+                # Show next word after a short delay
+                await asyncio.sleep(1)
+                await show_next_review_word(update, context)
+            else:
+                await query.edit_message_text(
+                    "❌ Ошибка при обработке ответа.\n"
+                    "Попробуйте /review снова."
+                )
             
     except Exception as e:
         logger.error(f"Error handling callback query: {e}")
