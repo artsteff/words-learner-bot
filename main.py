@@ -380,16 +380,16 @@ async def handle_callback_query(update: Update, context: CallbackContext) -> Non
                     feedback = "✅ Правильно!" if knew else "❌ Неправильно. Попробуйте еще раз!"
                     await query.edit_message_text(feedback)
                     
-                                    # Show next word after a short delay
-                await asyncio.sleep(1)
-                try:
-                    await show_next_review_word(update, context, from_callback=True)
-                except Exception as e:
-                    logger.error(f"Error showing next review word: {e}")
-                    await query.edit_message_text(
-                        "❌ Ошибка при показе следующего слова.\n"
-                        "Попробуйте /learn снова."
-                    )
+                    # Show next word after a short delay
+                    await asyncio.sleep(1)
+                    try:
+                        await show_next_review_word(update, context, from_callback=True)
+                    except Exception as e:
+                        logger.error(f"Error showing next review word: {e}")
+                        await query.edit_message_text(
+                            "❌ Ошибка при показе следующего слова.\n"
+                            "Попробуйте /learn снова."
+                        )
                 else:
                     await query.edit_message_text(
                         "❌ Ошибка при обработке ответа.\n"
@@ -433,14 +433,14 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
                     count = 100
                     await update.message.reply_text("⚠️ Максимум 100 слов. Установлено 100.")
                 # Remove the count from context
-                context = " ".join(parts[:-1])
+                context_text = " ".join(parts[:-1])
             except ValueError:
                 # Last part is not a number, use default count
-                context = text
+                context_text = text
                 count = 20
         else:
             # Only one word or empty, use default count
-            context = text
+            context_text = text
             count = 20
         
         # Get user's language pair
@@ -450,24 +450,24 @@ async def handle_text_message(update: Update, context: CallbackContext) -> None:
         
         # Show "generating" message
         generating_msg = await update.message.reply_text(
-            f"🤖 Генерирую {count} слов для контекста: '{context}'...\n"
+            f"🤖 Генерирую {count} слов для контекста: '{context_text}'...\n"
             "Это может занять несколько секунд."
         )
         
         # Generate words
         from services.ai_service import ai_service
-        words = await ai_service.generate_word_list(context, lang_from, lang_to, count)
+        words = await ai_service.generate_word_list(context_text, lang_from, lang_to, count)
         
         if words:
             # Add words to database
             from services.word_service import word_service
-            added_words = word_service.add_words_from_list(user.id, words, context)
+            added_words = word_service.add_words_from_list(user.id, words, context_text)
             
             # Show results
             result_message = f"""
 ✅ Создан список из {len(added_words)} слов!
 
-📝 Контекст: {context}
+📝 Контекст: {context_text}
 🌍 Языки: {lang_from.upper()} → {lang_to.upper()}
 📊 Запрошено: {count} слов
 
