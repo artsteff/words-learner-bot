@@ -154,11 +154,11 @@ async def learn_command(update: Update, context: CallbackContext) -> None:
         due_words = srs_service.get_due_words(user.id, limit=10)
         
         if not due_words:
-                    await update.message.reply_text(
-            "🎉 Отлично! У вас нет слов для изучения.\n\n"
-            "Все слова уже выучены или еще не готовы для повторения.\n"
-            "Используйте /generate для добавления новых слов!"
-        )
+            await update.message.reply_text(
+                "🎉 Отлично! У вас нет слов для изучения.\n\n"
+                "Все слова уже выучены или еще не готовы для повторения.\n"
+                "Используйте /generate для добавления новых слов!"
+            )
             return
         
         # Store words in context for this session
@@ -190,14 +190,14 @@ async def show_next_review_word(update: Update, context: CallbackContext, from_c
                 "Используйте /stats для просмотра статистики."
             )
             
-                    if from_callback and update.callback_query:
-            # We're in a callback query context
-            await update.callback_query.message.reply_text(completion_message)
-        elif update.message:
-            # We're in a regular message context
-            await update.message.reply_text(completion_message)
-        else:
-            logger.error("Cannot send message: neither callback_query nor message available")
+            if from_callback and update.callback_query:
+                # We're in a callback query context
+                await update.callback_query.message.reply_text(completion_message)
+            elif update.message:
+                # We're in a regular message context
+                await update.message.reply_text(completion_message)
+            else:
+                logger.error("Cannot send message: neither callback_query nor message available")
             
             # Clear session data
             context.user_data.clear()
