@@ -1,0 +1,360 @@
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+import uvicorn
+import os
+from dotenv import load_dotenv
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+import asyncio
+import logging
+
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
+app = FastAPI(title="Words Learner Bot", version="1.0.0")
+
+# Telegram bot setup
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+telegram_app = Application.builder().token(TELEGRAM_TOKEN).build()
+
+# Basic command handlers
+async def start_command(update: Update, context: CallbackContext) -> None:
+    """Handle /start command"""
+    user = update.effective_user
+    
+    # Get or create user
+    try:
+        from services.user_service import user_service
+        user_service.get_or_create_user(user.id, user.username)
+    except Exception as e:
+        logger.error(f"Error creating user: {e}")
+    
+    welcome_message = f"""
+👋 Привет, {user.first_name}!
+
+Добро пожаловать в Words Learner Bot! 
+
+Этот бот поможет вам изучать слова с помощью:
+• Генерации персональных списков слов
+• Системы интервального повторения
+• Простого интерфейса "Знаю/Не знаю"
+
+Выберите языковую пару для начала:
+"""
+    
+    # Create inline keyboard for language selection
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    keyboard = [
+        [InlineKeyboardButton("🇬🇧 English ↔ 🇳🇱 Dutch", callback_data="lang_en_nl")],
+        [InlineKeyboardButton("🇬🇧 English ↔ 🇷🇺 Russian", callback_data="lang_en_ru")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(welcome_message, reply_markup=reply_markup)
+
+async def help_command(update: Update, context: CallbackContext) -> None:
+    """Handle /help command"""
+    help_text = """
+📚 Доступные команды:
+
+/start - Начать работу с ботом
+/help - Показать эту справку
+/generate - Создать новый список слов
+/review - Повторить слова
+/stats - Показать статистику
+/profile - Настройки профиля
+
+💡 Как использовать:
+1. Выберите языковую пару
+2. Опишите контекст (например, "поездка в Амстердам")
+3. Получите персональный список слов
+4. Регулярно повторяйте слова
+"""
+    await update.message.reply_text(help_text)
+
+async def generate_command(update: Update, context: CallbackContext) -> None:
+    """Handle /generate command"""
+    user = update.effective_user
+    
+    # Check if user is configured
+    try:
+        from services.user_service import user_service
+        if not user_service.is_user_configured(user.id):
+            await update.message.reply_text(
+                "⚠️ Сначала выберите языковую пару!\n\n"
+                "Используйте /start для настройки профиля."
+            )
+            return
+    except Exception as e:
+        logger.error(f"Error checking user configuration: {e}")
+    
+    await update.message.reply_text(
+        "🎯 Опишите контекст для генерации слов.\n\n"
+        "Например:\n"
+        "• '2-дневная поездка в Барселону'\n"
+        "• 'деловая встреча'\n"
+        "• 'поход в ресторан'\n"
+        "• 'заказ еды в ресторане'\n\n"
+        "По умолчанию будет создано 20 слов.\n"
+        "Можно указать количество: 'ресторан 15'"
+    )
+
+async def review_command(update: Update, context: CallbackContext) -> None:
+    """Handle /review command"""
+    await update.message.reply_text(
+        "🔄 Начинаем повторение слов!\n\n"
+        "Сейчас будут показаны слова для повторения.\n"
+        "Отвечайте 'Знаю' или 'Не знаю'."
+    )
+
+async def stats_command(update: Update, context: CallbackContext) -> None:
+    """Handle /stats command"""
+    user = update.effective_user
+    
+    try:
+        from services.user_service import user_service
+        user_stats = user_service.get_user_stats(user.id)
+        
+        stats = user_stats.get("stats", {})
+        streak = user_stats.get("streak", 0)
+        profile = user_stats.get("profile", {})
+        
+        stats_message = f"""
+📊 Ваша статистика:
+
+📚 Слова:
+• Всего слов: {stats.get('total_words', 0)}
+• Добавлено сегодня: {stats.get('today_reviews', 0)}
+• Ожидают повторения: {stats.get('due_words', 0)}
+
+🎯 Прогресс:
+• Точность: {stats.get('accuracy', 0)}%
+• Серия дней: {streak}
+
+👤 Профиль:
+• Языковая пара: {profile.get('language_from', 'Не выбрана')} → {profile.get('language_to', 'Не выбрана')}
+• Часовой пояс: {profile.get('timezone', 'UTC')}
+"""
+        
+        await update.message.reply_text(stats_message)
+        
+    except Exception as e:
+        logger.error(f"Error getting stats: {e}")
+        await update.message.reply_text(
+            "❌ Ошибка при получении статистики.\n"
+            "Попробуйте позже."
+        )
+
+async def profile_command(update: Update, context: CallbackContext) -> None:
+    """Handle /profile command"""
+    user = update.effective_user
+    
+    try:
+        from services.user_service import user_service
+        profile = user_service.get_user_profile(user.id)
+        
+        if profile:
+            profile_message = f"""
+👤 Ваш профиль:
+
+📝 Основная информация:
+• Имя: {user.first_name}
+• Username: @{user.username or 'Не указан'}
+• ID: {user.id}
+
+🌍 Языки:
+• Языковая пара: {profile.get('language_from', 'Не выбрана')} → {profile.get('language_to', 'Не выбрана')}
+• Часовой пояс: {profile.get('timezone', 'UTC')}
+
+📅 Активность:
+• Дата регистрации: {profile.get('created_at', 'Неизвестно')}
+• Последняя активность: {profile.get('last_active', 'Неизвестно')}
+
+💡 Для изменения настроек используйте /start
+"""
+        else:
+            profile_message = """
+👤 Профиль не найден.
+
+Используйте /start для создания профиля.
+"""
+        
+        await update.message.reply_text(profile_message)
+        
+    except Exception as e:
+        logger.error(f"Error getting profile: {e}")
+        await update.message.reply_text(
+            "❌ Ошибка при получении профиля.\n"
+            "Попробуйте позже."
+        )
+
+async def handle_callback_query(update: Update, context: CallbackContext) -> None:
+    """Handle callback queries from inline keyboards"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        if query.data.startswith("lang_"):
+            # Language selection
+            _, lang_from, lang_to = query.data.split("_")
+            
+            from services.user_service import user_service
+            user_service.update_user_languages(query.from_user.id, lang_from, lang_to)
+            
+            await query.edit_message_text(
+                f"✅ Языковая пара установлена: {lang_from.upper()} → {lang_to.upper()}\n\n"
+                "Теперь вы можете:\n"
+                "• /generate - создать список слов\n"
+                "• /review - повторить слова\n"
+                "• /stats - посмотреть статистику"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error handling callback query: {e}")
+        await query.edit_message_text("❌ Произошла ошибка. Попробуйте снова.")
+
+async def handle_text_message(update: Update, context: CallbackContext) -> None:
+    """Handle text messages (context for word generation)"""
+    user = update.effective_user
+    text = update.message.text
+    
+    try:
+        from services.user_service import user_service
+        
+        # Check if user is configured
+        if not user_service.is_user_configured(user.id):
+            await update.message.reply_text(
+                "⚠️ Сначала выберите языковую пару!\n\n"
+                "Используйте /start для настройки профиля."
+            )
+            return
+        
+        # Parse context and count
+        parts = text.strip().split()
+        if len(parts) == 1:
+            context = parts[0]
+            count = 20  # Default
+        elif len(parts) == 2:
+            context = parts[0]
+            try:
+                count = int(parts[1])
+                if count > 100:
+                    count = 100
+                    await update.message.reply_text("⚠️ Максимум 100 слов. Установлено 100.")
+            except ValueError:
+                context = text
+                count = 20
+        else:
+            context = text
+            count = 20
+        
+        # Get user's language pair
+        profile = user_service.get_user_profile(user.id)
+        lang_from = profile.get("language_from")
+        lang_to = profile.get("language_to")
+        
+        # Show "generating" message
+        generating_msg = await update.message.reply_text(
+            f"🤖 Генерирую {count} слов для контекста: '{context}'...\n"
+            "Это может занять несколько секунд."
+        )
+        
+        # Generate words
+        from services.ai_service import ai_service
+        words = await ai_service.generate_word_list(context, lang_from, lang_to, count)
+        
+        if words:
+            # Add words to database
+            from services.word_service import word_service
+            added_words = word_service.add_words_from_list(user.id, words, context)
+            
+            # Show results
+            result_message = f"""
+✅ Создан список из {len(added_words)} слов!
+
+📝 Контекст: {context}
+🌍 Языки: {lang_from.upper()} → {lang_to.upper()}
+
+📚 Слова добавлены в вашу коллекцию.
+Используйте /review для повторения!
+"""
+            
+            await generating_msg.edit_text(result_message)
+            
+            # Show first few words as preview
+            if len(words) > 0:
+                preview = "📖 Предварительный просмотр:\n\n"
+                for i, word in enumerate(words[:3]):  # Show first 3 words
+                    preview += f"{i+1}. **{word['word']}** → {word['translation']}\n"
+                    if word.get('example_sentence_L1'):
+                        preview += f"   💡 {word['example_sentence_L1']}\n"
+                    preview += "\n"
+                
+                if len(words) > 3:
+                    preview += f"... и еще {len(words) - 3} слов"
+                
+                await update.message.reply_text(preview)
+        else:
+            await generating_msg.edit_text(
+                "❌ Не удалось сгенерировать слова.\n"
+                "Попробуйте другой контекст или попробуйте позже."
+            )
+            
+    except Exception as e:
+        logger.error(f"Error handling text message: {e}")
+        await update.message.reply_text(
+            "❌ Произошла ошибка при генерации слов.\n"
+            "Попробуйте позже."
+        )
+
+# Add command handlers
+telegram_app.add_handler(CommandHandler("start", start_command))
+telegram_app.add_handler(CommandHandler("help", help_command))
+telegram_app.add_handler(CommandHandler("generate", generate_command))
+telegram_app.add_handler(CommandHandler("review", review_command))
+telegram_app.add_handler(CommandHandler("stats", stats_command))
+telegram_app.add_handler(CommandHandler("profile", profile_command))
+
+# Add callback query handler for inline keyboards
+from telegram.ext import CallbackQueryHandler
+telegram_app.add_handler(CallbackQueryHandler(handle_callback_query))
+
+# Add message handler for text input
+telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+
+# Webhook endpoint for Telegram
+@app.post("/webhook")
+async def webhook(request: Request):
+    """Handle Telegram webhook"""
+    try:
+        data = await request.json()
+        update = Update.de_json(data, telegram_app.bot)
+        await telegram_app.process_update(update)
+        return JSONResponse(content={"status": "ok"})
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return JSONResponse(content={"status": "error"}, status_code=500)
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "bot": "Words Learner Bot"}
+
+# Root endpoint
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {"message": "Words Learner Bot API", "version": "1.0.0"}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
