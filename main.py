@@ -176,7 +176,7 @@ async def review_command(update: Update, context: CallbackContext) -> None:
             "Попробуйте позже."
         )
 
-async def show_next_review_word(update: Update, context: CallbackContext) -> None:
+async def show_next_review_word(update: Update, context: CallbackContext, from_callback: bool = False) -> None:
     """Show next word for review"""
     try:
         words = context.user_data.get('review_words', [])
@@ -184,11 +184,19 @@ async def show_next_review_word(update: Update, context: CallbackContext) -> Non
         
         if current_index >= len(words):
             # Review session complete
-            await update.message.reply_text(
+            completion_message = (
                 "🎉 Повторение завершено!\n\n"
                 f"Вы повторили {len(words)} слов.\n"
                 "Используйте /stats для просмотра статистики."
             )
+            
+            if from_callback:
+                # We're in a callback query context
+                await update.callback_query.message.reply_text(completion_message)
+            else:
+                # We're in a regular message context
+                await update.message.reply_text(completion_message)
+            
             # Clear session data
             context.user_data.clear()
             return
@@ -216,14 +224,21 @@ async def show_next_review_word(update: Update, context: CallbackContext) -> Non
 {word.example if word.example else 'Пример не доступен'}
 """
         
-        await update.message.reply_text(word_message, reply_markup=reply_markup)
+        if from_callback:
+            # We're in a callback query context
+            await update.callback_query.message.reply_text(word_message, reply_markup=reply_markup)
+        else:
+            # We're in a regular message context
+            await update.message.reply_text(word_message, reply_markup=reply_markup)
         
     except Exception as e:
         logger.error(f"Error showing review word: {e}")
-        await update.message.reply_text(
-            "❌ Ошибка при показе слова.\n"
-            "Попробуйте /review снова."
-        )
+        error_message = "❌ Ошибка при показе слова.\nПопробуйте /review снова."
+        
+        if from_callback:
+            await update.callback_query.message.reply_text(error_message)
+        else:
+            await update.message.reply_text(error_message)
 
 async def stats_command(update: Update, context: CallbackContext) -> None:
     """Handle /stats command"""
@@ -338,30 +353,37 @@ async def handle_callback_query(update: Update, context: CallbackContext) -> Non
         
         elif query.data.startswith("review_"):
             # Review session buttons
-            user = update.effective_user
+            user = query.from_user
             review_data = query.data.split("_")
             action = review_data[1]  # "knew" or "didnt_know"
             word_id = int(review_data[2])
             
-            from services.srs_service import SRSService
-            srs_service = SRSService()
-            
-            # Process the review
-            knew = (action == "knew")
-            success = srs_service.process_review(word_id, user.id, knew)
-            
-            if success:
-                # Move to next word
-                context.user_data['current_word_index'] = context.user_data.get('current_word_index', 0) + 1
+            try:
+                from services.srs_service import SRSService
+                srs_service = SRSService()
                 
-                # Show feedback
-                feedback = "✅ Правильно!" if knew else "❌ Неправильно. Попробуйте еще раз!"
-                await query.edit_message_text(feedback)
+                # Process the review
+                knew = (action == "knew")
+                success = srs_service.process_review(word_id, user.id, knew)
                 
-                # Show next word after a short delay
+                if success:
+                    # Move to next word
+                    context.user_data['current_word_index'] = context.user_data.get('current_word_index', 0) + 1
+                    
+                    # Show feedback
+                    feedback = "✅ Правильно!" if knew else "❌ Неправильно. Попробуйте еще раз!"
+                    await query.edit_message_text(feedback)
+                    
+                                    # Show next word after a short delay
                 await asyncio.sleep(1)
-                await show_next_review_word(update, context)
-            else:
+                await show_next_review_word(update, context, from_callback=True)
+                else:
+                    await query.edit_message_text(
+                        "❌ Ошибка при обработке ответа.\n"
+                        "Попробуйте /review снова."
+                    )
+            except Exception as e:
+                logger.error(f"Error processing review: {e}")
                 await query.edit_message_text(
                     "❌ Ошибка при обработке ответа.\n"
                     "Попробуйте /review снова."
